@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+    <Target Name="ILRepacker" AfterTargets="Build">
+        <ItemGroup>
+            <InputAssemblies Include="$(TargetPath)" />
+            <InputAssemblies Include="$(TargetDir)AgonesSDK.dll" />
+            <InputAssemblies Include="$(TargetDir)Google.Protobuf.dll" />
+            <InputAssemblies Include="$(TargetDir)Google.Api.CommonProtos.dll" />
+            <InputAssemblies Include="$(TargetDir)Grpc.Core.Api.dll" />
+            <InputAssemblies Include="$(TargetDir)Grpc.Net.Client.dll" />
+            <InputAssemblies Include="$(TargetDir)Grpc.Net.Common.dll" />
+        </ItemGroup>
+
+        <ILRepack
+            InputAssemblies="@(InputAssemblies)"
+            OutputFile="$(TargetDir)ResoniteAgones.Merged.dll"
+            LibraryPath="$(ResonitePath);$(ResonitePath)Libraries;$(TargetDir)"
+            Internalize="true"
+            Parallel="true"
+            TargetKind="Dll"
+        />
+
+        <Copy
+            Condition="'$(CopyToMods)' == 'true'"
+            SourceFiles="$(TargetDir)ResoniteAgones.Merged.dll"
+            DestinationFolder="$(ResonitePath)rml_mods"
+            SkipUnchangedFiles="true"
+        />
+    </Target>
+
+</Project>
