@@ -23,6 +23,7 @@ public class ResoniteAgones : ResoniteMod
 
     private bool _hasLoadedWorld;
     private GameServerState? _lastState;
+    private int? _lastReportedPlayerCount;
 
     public override void OnEngineInit()
     {
@@ -161,33 +162,57 @@ public class ResoniteAgones : ResoniteMod
                 ? _hasLoadedWorld ? GameServerState.Shutdown : (GameServerState?)null
                 : playerCount > 0 ? GameServerState.Allocated : GameServerState.Ready;
 
-            if (desiredState is null || desiredState == _lastState || _lastState == GameServerState.Shutdown)
+            if (_lastState == GameServerState.Shutdown)
             {
                 return;
             }
 
-            var status = desiredState.Value switch
+            if (desiredState is not null && desiredState != _lastState)
             {
-                GameServerState.Ready => await _agones.ReadyAsync(),
-                GameServerState.Allocated => await _agones.AllocateAsync(),
-                GameServerState.Shutdown => await _agones.ShutDownAsync(),
-                _ => throw new ArgumentOutOfRangeException(),
-            };
-
-            if (status.StatusCode == StatusCode.OK)
-            {
-                _lastState = desiredState;
-
-                if (desiredState == GameServerState.Shutdown)
+                try
                 {
-                    _lifetime.Cancel();
-                }
+                    var status = desiredState.Value switch
+                    {
+                        GameServerState.Ready => await _agones.ReadyAsync(),
+                        GameServerState.Allocated => await _agones.AllocateAsync(),
+                        GameServerState.Shutdown => await _agones.ShutDownAsync(),
+                        _ => throw new ArgumentOutOfRangeException(),
+                    };
 
-                Msg($"Agones state set to {desiredState} ({GetWorldCount()} worlds, {playerCount} players).");
+                    if (status.StatusCode == StatusCode.OK)
+                    {
+                        _lastState = desiredState;
+
+                        if (desiredState == GameServerState.Shutdown)
+                        {
+                            _lifetime.Cancel();
+                        }
+
+                        Msg($"Agones state set to {desiredState} ({GetWorldCount()} worlds, {playerCount} players).");
+                    }
+                    else
+                    {
+                        Error($"Agones {desiredState} request failed. {status.StatusCode} {status.Detail}");
+                    }
+                }
+                catch (Exception exception)
+                {
+                    Warn($"Agones {desiredState} request failed. {exception}");
+                }
             }
-            else
+
+            if (_lastState != GameServerState.Shutdown && _lastReportedPlayerCount != playerCount)
             {
-                Error($"Agones {desiredState} request failed. {status.StatusCode} {status.Detail}");
+                try
+                {
+                    await _agones.Beta().SetCounterCountAsync("players", playerCount);
+                    _lastReportedPlayerCount = playerCount;
+                    Msg($"Agones players counter set to {playerCount}.");
+                }
+                catch (Exception exception)
+                {
+                    Warn($"Agones players counter update failed. {exception}");
+                }
             }
         }
         catch (Exception exception)
